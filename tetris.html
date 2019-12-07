@@ -1,0 +1,284 @@
+<style media="screen">
+  * {
+    margin: 0;
+  }
+
+  #score {
+    display: none;
+    position: fixed;
+    color: white;
+    font-size: 45;
+  }
+
+  #menu {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+  }
+  #menu > .text {
+    margin-top: 25%;
+    font-size: 45;
+    display: block;
+    color: white;
+    text-align: center;
+  }
+</style>
+<div id="menu" onclick="startGame()">
+  <span class="text">Click to start</span>
+</div>
+
+<span id="score">0</span>
+
+<canvas id="c"></canvas>
+
+<script type="text/javascript">
+const mapWidth = 20;
+const mapHeight = Math.floor(20*500/300);
+var width, height;
+const cellWidth = 300/20;
+var c, ctx, score, score_span, map, time, fallingTime,
+    currentFigure = {},
+    moveCooldown = 6,
+    fallingCooldown = 25,
+    keys = { left: false, right: false, spin: false, down: false },
+    playing = false,
+    menu_div;
+
+const figures = [
+  [[1, 1, 1, 1]],
+  [
+    [1, 1],
+    [1, 1]
+  ],
+  [
+    [1, 1, 1],
+    [0, 0, 1]
+  ],
+  [
+    [1, 1, 1],
+    [1, 0, 0]
+  ],
+  [
+    [1, 1, 1],
+    [0, 1, 0]
+  ]
+];
+
+window.onload = function() {
+  c = document.getElementById("c");
+  ctx = c.getContext("2d");
+  width = c.width = innerWidth;
+  height = c.height = innerHeight;
+  score_span = document.getElementById('score');
+  menu_div = document.getElementById('menu');
+
+  c.addEventListener("mousedown", function(e) {
+    clicked = true;
+  });
+
+  map = [];
+
+  window.addEventListener("keydown", function(e) {
+    var key = e.key || e.keyCode;
+    if(key === "ArrowLeft" || key === 37) {
+      keys.left = true;
+    } else if(key === "ArrowRight" || key === 39) {
+      keys.right = true;
+    } else if(key === "ArrowUp" || key === 38) {
+      keys.rotate = true;
+    } else if(key === "ArrowDown" || key === 40) {
+      keys.down = true;
+    }
+  });
+  window.addEventListener("keyup", function(e) {
+    var key = e.key || e.keyCode;
+    if(key === "ArrowLeft" || key === 37) {
+      keys.left = false;
+    } else if(key === "ArrowRight" || key === 39) {
+      keys.right = false;
+    } else if(key === "ArrowDown" || key === 40) {
+      keys.down = false;
+    }
+  });
+  requestAnimationFrame(loop);
+}
+var startGame = function() {
+  map = [];
+  for(var x=0; x<mapWidth; x++) {
+    map[x] = [];
+    for(var y=0; y<mapHeight; y++) {
+      map[x][y] = 0;
+    }
+  }
+  score = 0;
+  currentFigure = null;
+  fallingTime = 0;
+  time = 0;
+  score_span.style.display = "block";
+  menu_div.style.display = "none";
+
+  playing = true;
+}
+var gameOver = function() {
+  score_span.style.display = "none";
+  menu_div.style.display = "block";
+  playing = false;
+}
+
+var printScore = function() {
+  score_span.innerHTML = score;
+}
+var loop = function() {
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, width, height);
+
+  if(playing) {
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(1, 1, mapWidth*cellWidth+1, mapHeight*cellWidth+1);
+
+    if(currentFigure === null) {
+      currentFigure = {};
+      currentFigure.c = figures[Math.round(Math.random()*(figures.length-1))];
+      currentFigure.x = Math.floor(mapWidth/2);
+      currentFigure.y = 3;
+
+      if(collide(currentFigure)) {
+        gameOver();
+      }
+    }
+
+    if(keys.rotate) {
+      var newFigure = spinFigure(currentFigure);
+      if(!collide(newFigure)) {
+        currentFigure = newFigure;
+      }
+      keys.rotate = false;
+    }
+    if(time % moveCooldown === 0) {
+      var movedFigure = clone(currentFigure);
+      movedFigure.x += (keys.left?-1:0)+(keys.right?1:0);
+      if(collide(movedFigure)) movedFigure.x = currentFigure.x;
+      else currentFigure = movedFigure;
+    }
+    if(fallingTime % fallingCooldown === 0 || keys.down) {
+      var movedFigure = clone(currentFigure);
+      movedFigure.y++;
+      if(!collide(movedFigure)) currentFigure = movedFigure;
+      else {
+        placeOnMap(currentFigure);
+        currentFigure = null;
+        checkForFullLines();
+      }
+    }
+
+
+
+
+    time ++;
+    fallingTime ++;
+    render();
+  }
+
+  requestAnimationFrame(loop);
+}
+var checkForFullLines = function() {
+  for(var y=0; y<mapHeight; y++) {
+    var doBreak = true;
+    for(var x=0; x<mapWidth; x++) {
+      if(map[x][y] === 0) {
+        doBreak = false;
+        break;
+      }
+    }
+    if(doBreak) {
+      for(var i=y; i>0; i--) {
+        for(var x=0; x<mapWidth; x++) {
+          map[x][i] = map[x][i-1];
+        }
+      }
+      score ++;
+      printScore();
+    }
+  }
+}
+var render = function() {
+  if(currentFigure != null) {
+    for(var x=0; x<currentFigure.c.length; x++) {
+      for(var y=0; y<currentFigure.c[x].length; y++) {
+        if(currentFigure.c[x][y] === 1) {
+          ctx.fillStyle = "#faa";
+          ctx.fillRect( (currentFigure.x+x)*cellWidth+1, (currentFigure.y+y)*cellWidth+1, cellWidth-2, cellWidth-2);
+        }
+      }
+    }
+  }
+
+  for(var x=0; x<mapWidth; x++) {
+    for(var y=0; y<mapHeight; y++) {
+      if(map[x][y] != 0) {
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(x*cellWidth+1, y*cellWidth+1, cellWidth-2, cellWidth-2);
+      }
+    }
+  }
+}
+var collide = function(figure) {
+  if((figure.x<0 || figure.x+figure.c.length > mapWidth || figure.y+figure.c[0].length>mapHeight)) return true;
+  for(var x=0; x<figure.c.length; x++) {
+    for(var y=0; y<figure.c[x].length; y++) {
+      if(figure.c[x][y] === 1 && map[figure.x+x][figure.y+y] === 1) return true;
+    }
+  }
+  return false;
+}
+var placeOnMap = function(figure) {
+  for(var x=0; x<figure.c.length; x++) {
+    for(var y=0; y<figure.c[x].length; y++) {
+      if(figure.c[x][y] === 1) map[figure.x+x][figure.y+y] = 1;
+    }
+  }
+}
+var clone = function(obj) {
+    var copy;
+
+    // Handle the 3 simple types, and null or undefined
+    if (null == obj || "object" != typeof obj) return obj;
+
+    // Handle Date
+    if (obj instanceof Date) {
+        copy = new Date();
+        copy.setTime(obj.getTime());
+        return copy;
+    }
+
+    // Handle Array
+    if (obj instanceof Array) {
+        copy = [];
+        for (var i = 0, len = obj.length; i < len; i++) {
+            copy[i] = clone(obj[i]);
+        }
+        return copy;
+    }
+
+    // Handle Object
+    if (obj instanceof Object) {
+        copy = {};
+        for (var attr in obj) {
+            if (obj.hasOwnProperty(attr)) copy[attr] = clone(obj[attr]);
+        }
+        return copy;
+    }
+
+    throw new Error("Unable to copy obj! Its type isn't supported.");
+}
+var spinFigure = function(figure) {
+  var newFigure = { c: [], x: figure.x, y: figure.y};
+  for(var x=0; x<figure.c[0].length; x++) {
+    newFigure.c[x] = [];
+    for(var y=0; y<figure.c.length; y++) {
+      newFigure.c[x][figure.c.length-y-1] = figure.c[y][x];
+    }
+  }
+  return newFigure;
+}
+</script>
