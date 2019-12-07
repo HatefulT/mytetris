@@ -79,6 +79,7 @@ window.onload = function() {
   map = [];
 
   window.addEventListener("keydown", function(e) {
+    e.preventDefault();
     var key = e.key || e.keyCode;
     if(key === "ArrowLeft" || key === 37) {
       keys.left = true;
@@ -91,6 +92,7 @@ window.onload = function() {
     }
   });
   window.addEventListener("keyup", function(e) {
+    e.preventDefault();
     var key = e.key || e.keyCode;
     if(key === "ArrowLeft" || key === 37) {
       keys.left = false;
